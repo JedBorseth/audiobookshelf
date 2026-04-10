@@ -28,6 +28,10 @@
         <p v-if="isAuthorsPage" class="text-sm">{{ $strings.ButtonAuthors }}</p>
         <span v-else class="material-symbols text-lg">groups</span>
       </nuxt-link>
+      <nuxt-link v-if="isBookLibrary" :to="`/library/${currentLibraryId}/browse`" class="grow h-full flex justify-center items-center" :class="isBrowsePage ? 'bg-primary/80' : 'bg-primary/40'">
+        <p v-if="isBrowsePage" class="text-sm">{{ $strings.ButtonBrowse }}</p>
+        <span v-else class="material-symbols text-lg">travel_explore</span>
+      </nuxt-link>
       <nuxt-link v-if="isPodcastLibrary && userIsAdminOrUp" :to="`/library/${currentLibraryId}/podcast/search`" class="grow h-full flex justify-center items-center" :class="isPodcastSearchPage ? 'bg-primary/80' : 'bg-primary/40'">
         <p class="text-sm">{{ $strings.ButtonAdd }}</p>
       </nuxt-link>
@@ -54,7 +58,7 @@
         <ui-context-menu-dropdown v-if="!isBatchSelecting && seriesContextMenuItems.length" :items="seriesContextMenuItems" class="mx-px" @action="seriesContextMenuAction" />
       </template>
       <!-- library & collections page -->
-      <template v-else-if="page !== 'search' && page !== 'podcast-search' && page !== 'recent-episodes' && !isHome && !isAuthorsPage">
+      <template v-else-if="page !== 'search' && page !== 'podcast-search' && page !== 'browse' && page !== 'recent-episodes' && !isHome && !isAuthorsPage">
         <p class="hidden md:block">{{ $formatNumber(numShowing) }} {{ entityName }}</p>
 
         <div class="grow hidden sm:inline-block" />
@@ -92,6 +96,12 @@
 
         <!-- author sort select -->
         <controls-sort-select v-model="settings.authorSortBy" :descending.sync="settings.authorSortDesc" :items="authorSortItems" class="w-36 sm:w-44 md:w-48 h-7.5 ml-1 sm:ml-4" @change="updateAuthorSort" />
+      </template>
+      <!-- browse (AudioBook Bay) -->
+      <template v-else-if="page === 'browse'">
+        <div class="grow" />
+        <p class="text-sm md:text-base px-2 text-center">{{ $strings.HeaderBrowseAudioBookBay }}</p>
+        <div class="grow" />
       </template>
       <!-- home page -->
       <template v-else-if="isHome">
@@ -262,6 +272,9 @@ export default {
     },
     isAuthorsPage() {
       return this.page === 'authors'
+    },
+    isBrowsePage() {
+      return this.$route.name === 'library-library-browse'
     },
     numShowing() {
       return this.totalEntities

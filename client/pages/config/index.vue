@@ -103,6 +103,26 @@
             <ui-toggle-switch v-model="newServerSettings.allowIframe" :label="$strings.LabelSettingsAllowIframe" :disabled="updatingServerSettings" @input="(val) => updateSettingsKey('allowIframe', val)" />
             <p aria-hidden="true" class="pl-4">{{ $strings.LabelSettingsAllowIframe }}</p>
           </div>
+
+          <div class="pt-4">
+            <h2 class="font-semibold">{{ $strings.HeaderSettingsIntegrations }}</h2>
+          </div>
+          <p class="text-xs text-gray-400 max-w-xl py-1">{{ $strings.HeaderBrowseAudioBookBay }}</p>
+          <div class="max-w-xl py-2">
+            <ui-text-input-with-label
+              v-model="newServerSettings.audioBookBayBaseUrl"
+              :label="$strings.LabelAudioBookBayBaseUrl"
+              :disabled="updatingServerSettings"
+              @blur="saveAudioBookBayBaseUrl"
+            />
+          </div>
+          <div class="max-w-xl py-2">
+            <ui-text-input-with-label v-model="realDebridApiTokenInput" type="password" :label="$strings.LabelRealDebridApiToken" :disabled="savingRealDebridToken" />
+            <p v-if="serverSettings.realDebridTokenSet" class="text-xs text-gray-400 mt-1">{{ $strings.LabelRealDebridTokenSaved }}</p>
+            <div class="pt-2">
+              <ui-btn small color="bg-success" :loading="savingRealDebridToken" @click="saveRealDebridToken">{{ $strings.ButtonSaveRealDebridToken }}</ui-btn>
+            </div>
+          </div>
         </div>
 
         <div class="flex-1">
@@ -232,7 +252,9 @@ export default {
       hasPrefixesChanged: false,
       newServerSettings: {},
       showConfirmPurgeCache: false,
-      savingPrefixes: false
+      savingPrefixes: false,
+      realDebridApiTokenInput: '',
+      savingRealDebridToken: false
     }
   },
   watch: {
@@ -366,10 +388,40 @@ export default {
       this.newServerSettings = this.serverSettings ? { ...this.serverSettings } : {}
       this.newServerSettings.sortingPrefixes = [...(this.newServerSettings.sortingPrefixes || [])]
       this.newServerSettings.allowedOrigins = [...(this.newServerSettings.allowedOrigins || [])]
+      if (!this.newServerSettings.audioBookBayBaseUrl) {
+        this.newServerSettings.audioBookBayBaseUrl = 'https://audiobookbay.lu'
+      }
       this.scannerEnableWatcher = !this.newServerSettings.scannerDisableWatcher
 
       this.homepageUseBookshelfView = this.newServerSettings.homeBookshelfView != this.$constants.BookshelfView.DETAIL
       this.useBookshelfView = this.newServerSettings.bookshelfView != this.$constants.BookshelfView.DETAIL
+    },
+    saveAudioBookBayBaseUrl() {
+      const next = (this.newServerSettings.audioBookBayBaseUrl || '').trim()
+      const prev = (this.serverSettings.audioBookBayBaseUrl || '').trim()
+      if (next && next !== prev) {
+        this.updateSettingsKey('audioBookBayBaseUrl', next)
+      }
+    },
+    saveRealDebridToken() {
+      this.savingRealDebridToken = true
+      const token = (this.realDebridApiTokenInput || '').trim()
+      this.$store
+        .dispatch('updateServerSettings', { realDebridApiToken: token })
+        .then((response) => {
+          if (response.error) {
+            this.$toast.error(this.$strings.ToastRealDebridSaveFailed)
+            return
+          }
+          this.$toast.success(this.$strings.ToastRealDebridSaveSuccess)
+          this.realDebridApiTokenInput = ''
+        })
+        .catch(() => {
+          this.$toast.error(this.$strings.ToastRealDebridSaveFailed)
+        })
+        .finally(() => {
+          this.savingRealDebridToken = false
+        })
     },
     purgeCache() {
       this.showConfirmPurgeCache = true

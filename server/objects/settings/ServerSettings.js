@@ -84,6 +84,10 @@ class ServerSettings {
     this.authOpenIDAdvancedPermsClaim = ''
     this.authOpenIDSubfolderForRedirectURLs = undefined
 
+    // Browse integrations (AudioBook Bay + Real-Debrid)
+    this.realDebridApiToken = null
+    this.audioBookBayBaseUrl = 'https://audiobookbay.lu'
+
     if (settings) {
       this.construct(settings)
     }
@@ -148,6 +152,9 @@ class ServerSettings {
     this.authOpenIDAdvancedPermsClaim = settings.authOpenIDAdvancedPermsClaim || ''
     this.authOpenIDSubfolderForRedirectURLs = settings.authOpenIDSubfolderForRedirectURLs
 
+    this.realDebridApiToken = settings.realDebridApiToken && String(settings.realDebridApiToken).trim() ? String(settings.realDebridApiToken).trim() : null
+    this.audioBookBayBaseUrl = ServerSettings.normalizeAudioBookBayBaseUrl(settings.audioBookBayBaseUrl)
+
     if (!Array.isArray(this.authActiveAuthMethods)) {
       this.authActiveAuthMethods = ['local']
     }
@@ -200,6 +207,22 @@ class ServerSettings {
     if (process.env.ALLOW_IFRAME === '1' && !this.allowIframe) {
       Logger.info(`[ServerSettings] Using allowIframe from environment variable`)
       this.allowIframe = true
+    }
+  }
+
+  /**
+   * @param {string} [url]
+   * @returns {string}
+   */
+  static normalizeAudioBookBayBaseUrl(url) {
+    const fallback = 'https://audiobookbay.lu'
+    if (!url || typeof url !== 'string') return fallback
+    try {
+      const u = new URL(url.trim())
+      if (u.protocol !== 'https:') return fallback
+      return u.origin
+    } catch {
+      return fallback
     }
   }
 
@@ -256,18 +279,22 @@ class ServerSettings {
       authOpenIDMobileRedirectURIs: this.authOpenIDMobileRedirectURIs, // Do not return to client
       authOpenIDGroupClaim: this.authOpenIDGroupClaim, // Do not return to client
       authOpenIDAdvancedPermsClaim: this.authOpenIDAdvancedPermsClaim, // Do not return to client
-      authOpenIDSubfolderForRedirectURLs: this.authOpenIDSubfolderForRedirectURLs
+      authOpenIDSubfolderForRedirectURLs: this.authOpenIDSubfolderForRedirectURLs,
+      realDebridApiToken: this.realDebridApiToken, // stripped in toJSONForBrowser
+      audioBookBayBaseUrl: this.audioBookBayBaseUrl
     }
   }
 
   toJSONForBrowser() {
     const json = this.toJSON()
     delete json.tokenSecret
+    delete json.realDebridApiToken
     delete json.authOpenIDClientID
     delete json.authOpenIDClientSecret
     delete json.authOpenIDMobileRedirectURIs
     delete json.authOpenIDGroupClaim
     delete json.authOpenIDAdvancedPermsClaim
+    json.realDebridTokenSet = !!this.realDebridApiToken
     return json
   }
 
@@ -343,6 +370,18 @@ class ServerSettings {
         payload[key].sort()
         if (payload[key].join() !== this.authActiveAuthMethods.join()) {
           this.authActiveAuthMethods = payload[key]
+          hasUpdates = true
+        }
+      } else if (key === 'realDebridApiToken') {
+        const next = payload[key] && String(payload[key]).trim() ? String(payload[key]).trim() : null
+        if (this.realDebridApiToken !== next) {
+          this.realDebridApiToken = next
+          hasUpdates = true
+        }
+      } else if (key === 'audioBookBayBaseUrl') {
+        const next = ServerSettings.normalizeAudioBookBayBaseUrl(payload[key])
+        if (this.audioBookBayBaseUrl !== next) {
+          this.audioBookBayBaseUrl = next
           hasUpdates = true
         }
       } else if (this[key] !== payload[key]) {

@@ -35,6 +35,7 @@ const MiscController = require('../controllers/MiscController')
 const ShareController = require('../controllers/ShareController')
 const StatsController = require('../controllers/StatsController')
 const ApiKeyController = require('../controllers/ApiKeyController')
+const AudiobookBayController = require('../controllers/AudiobookBayController')
 
 class ApiRouter {
   constructor(Server) {
@@ -95,6 +96,25 @@ class ApiRouter {
     this.router.post('/libraries/:id/remove-metadata', LibraryController.middleware.bind(this), LibraryController.removeAllMetadataFiles.bind(this))
     this.router.get('/libraries/:id/podcast-titles', LibraryController.middleware.bind(this), LibraryController.getPodcastTitles.bind(this))
     this.router.get('/libraries/:id/download', LibraryController.middleware.bind(this), LibraryController.downloadMultiple.bind(this))
+
+    this.router.get(
+      '/libraries/:id/browse/abb',
+      LibraryController.middleware.bind(this),
+      AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
+      AudiobookBayController.list.bind(AudiobookBayController)
+    )
+    this.router.get(
+      '/libraries/:id/browse/abb/detail',
+      LibraryController.middleware.bind(this),
+      AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
+      AudiobookBayController.detail.bind(AudiobookBayController)
+    )
+    this.router.post(
+      '/libraries/:id/browse/real-debrid',
+      LibraryController.middleware.bind(this),
+      AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
+      AudiobookBayController.addToRealDebrid.bind(AudiobookBayController)
+    )
 
     //
     // Item Routes

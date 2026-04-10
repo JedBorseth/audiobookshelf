@@ -82,6 +82,10 @@ class ApiCacheManager {
         return next()
       }
 
+      if (/\/libraries\/[^/]+\/browse\//.test(req.path || '')) {
+        return next()
+      }
+
       const key = { user: req.user.username, url: req.url }
       const stringifiedKey = JSON.stringify(key)
       Logger.debug(`[ApiCacheManager] count: ${this.cache.size} size: ${this.cache.calculatedSize}`)
