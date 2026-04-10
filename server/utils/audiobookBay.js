@@ -156,13 +156,21 @@ function parseDetail(html) {
  * @param {string[]} trackers
  */
 function buildMagnetUri(infoHash, name, trackers) {
-  const params = new URLSearchParams()
-  params.set('xt', `urn:btih:${infoHash}`)
-  if (name) params.set('dn', name)
-  trackers.forEach((tr) => {
-    if (tr) params.append('tr', tr)
-  })
-  return `magnet:?${params.toString()}`
+  // Real-Debrid and most clients expect canonical magnets: xt=urn:btih:<hash> with
+  // literal colons — not xt=urn%3Abtih%3A... (URLSearchParams encodes those).
+  const parts = [`xt=urn:btih:${infoHash}`]
+  if (name) {
+    const dn = String(name).slice(0, 300)
+    parts.push(`dn=${encodeURIComponent(dn)}`)
+  }
+  const maxTrackers = 16
+  let n = 0
+  for (const tr of trackers) {
+    if (!tr || n >= maxTrackers) break
+    parts.push(`tr=${encodeURIComponent(tr)}`)
+    n++
+  }
+  return `magnet:?${parts.join('&')}`
 }
 
 /**

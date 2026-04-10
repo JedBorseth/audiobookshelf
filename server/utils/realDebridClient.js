@@ -1,4 +1,5 @@
 const axios = require('axios')
+const querystring = require('querystring')
 const Logger = require('../Logger')
 
 const RD_BASE = 'https://api.real-debrid.com/rest/1.0'
@@ -23,15 +24,15 @@ function createClient(token) {
  */
 async function addMagnet(token, magnet) {
   const client = createClient(token)
-  const body = new URLSearchParams()
-  body.append('magnet', magnet)
-  const res = await client.post('/torrents/addMagnet', body.toString(), {
+  const body = querystring.stringify({ magnet })
+  const res = await client.post('/torrents/addMagnet', body, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     validateStatus: () => true
   })
   if (res.status !== 201 && res.status !== 200) {
-    const msg = res.data?.error || `HTTP ${res.status}`
-    throw new Error(msg)
+    const msg = res.data?.error || res.data?.error_code || `HTTP ${res.status}`
+    Logger.error(`[realDebridClient] addMagnet failed status=${res.status} body=${JSON.stringify(res.data)}`)
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(res.data))
   }
   if (!res.data?.id) {
     throw new Error('Real-Debrid: missing torrent id')
@@ -72,9 +73,8 @@ async function waitForFilesSelection(client, id) {
  */
 async function selectAllFiles(token, id) {
   const client = createClient(token)
-  const body = new URLSearchParams()
-  body.append('files', 'all')
-  const res = await client.post(`/torrents/selectFiles/${id}`, body.toString(), {
+  const body = querystring.stringify({ files: 'all' })
+  const res = await client.post(`/torrents/selectFiles/${id}`, body, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     validateStatus: () => true
   })
