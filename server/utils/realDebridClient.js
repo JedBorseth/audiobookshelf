@@ -104,6 +104,35 @@ async function addMagnetAndSelectAll(token, magnet) {
   return { id }
 }
 
+/**
+ * @param {string} token
+ * @param {string} id
+ * @returns {Promise<{ id: string, filename: string, originalFilename?: string }>}
+ */
+async function getTorrentInfo(token, id) {
+  if (!token?.trim()) {
+    throw new Error('Real-Debrid API token is not configured')
+  }
+  const client = createClient(token.trim())
+  const res = await client.get(`/torrents/info/${encodeURIComponent(id)}`, { validateStatus: () => true })
+  if (res.status !== 200) {
+    const msg = res.data?.error || `HTTP ${res.status}`
+    Logger.error(`[realDebridClient] getTorrentInfo failed status=${res.status} body=${JSON.stringify(res.data)}`)
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(res.data))
+  }
+  const filename = res.data?.filename != null ? String(res.data.filename).trim() : ''
+  if (!filename) {
+    throw new Error('Real-Debrid: missing torrent filename')
+  }
+  const originalFilename = res.data?.original_filename != null ? String(res.data.original_filename).trim() : ''
+  return {
+    id: String(res.data.id || id),
+    filename,
+    originalFilename: originalFilename || undefined
+  }
+}
+
 module.exports = {
-  addMagnetAndSelectAll
+  addMagnetAndSelectAll,
+  getTorrentInfo
 }

@@ -160,10 +160,14 @@ export default {
       if (!this.selectedDetail?.path) return
       this.rdLoading = true
       try {
-        await this.$axios.$post(`/api/libraries/${this.libraryId}/browse/real-debrid`, {
-          path: this.selectedDetail.path
+        const data = await this.$axios.$post(`/api/libraries/${this.libraryId}/browse/real-debrid`, {
+          path: this.selectedDetail.path,
+          title: this.selectedDetail.title
         })
         this.$toast.success(this.$strings.ToastRealDebridAddSuccess)
+        if (data?.symlink && data.symlink.created === false && data.symlink.error) {
+          this.$toast.warning(`${this.$strings.ToastRealDebridSymlinkFailed}: ${data.symlink.error}`)
+        }
       } catch (error) {
         console.error('Real-Debrid add failed', error)
         const msg = error.response?.data || error.message

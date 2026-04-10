@@ -123,6 +123,24 @@
               <ui-btn small color="bg-success" :loading="savingRealDebridToken" @click="saveRealDebridToken">{{ $strings.ButtonSaveRealDebridToken }}</ui-btn>
             </div>
           </div>
+          <div class="max-w-xl py-2">
+            <ui-text-input-with-label
+              v-model="newServerSettings.realDebridMountPath"
+              :label="$strings.LabelRealDebridMountPath"
+              :disabled="updatingServerSettings"
+              @blur="saveRealDebridMountPath"
+            />
+            <p class="text-xs text-gray-400 mt-1">{{ $strings.LabelRealDebridMountPathHelp }}</p>
+          </div>
+          <div class="max-w-xl py-2">
+            <ui-text-input-with-label
+              v-model="newServerSettings.realDebridSymlinkDir"
+              :label="$strings.LabelRealDebridSymlinkDir"
+              :disabled="updatingServerSettings"
+              @blur="saveRealDebridSymlinkDir"
+            />
+            <p class="text-xs text-gray-400 mt-1">{{ $strings.LabelRealDebridSymlinkDirHelp }}</p>
+          </div>
         </div>
 
         <div class="flex-1">
@@ -391,6 +409,12 @@ export default {
       if (!this.newServerSettings.audioBookBayBaseUrl) {
         this.newServerSettings.audioBookBayBaseUrl = 'https://audiobookbay.lu'
       }
+      if (this.newServerSettings.realDebridMountPath == null) {
+        this.newServerSettings.realDebridMountPath = ''
+      }
+      if (this.newServerSettings.realDebridSymlinkDir == null) {
+        this.newServerSettings.realDebridSymlinkDir = ''
+      }
       this.scannerEnableWatcher = !this.newServerSettings.scannerDisableWatcher
 
       this.homepageUseBookshelfView = this.newServerSettings.homeBookshelfView != this.$constants.BookshelfView.DETAIL
@@ -401,6 +425,20 @@ export default {
       const prev = (this.serverSettings.audioBookBayBaseUrl || '').trim()
       if (next && next !== prev) {
         this.updateSettingsKey('audioBookBayBaseUrl', next)
+      }
+    },
+    saveRealDebridMountPath() {
+      const next = (this.newServerSettings.realDebridMountPath || '').trim()
+      const prev = (this.serverSettings.realDebridMountPath || '').trim()
+      if (next !== prev) {
+        this.updateSettingsKey('realDebridMountPath', next || null)
+      }
+    },
+    saveRealDebridSymlinkDir() {
+      const next = (this.newServerSettings.realDebridSymlinkDir || '').trim()
+      const prev = (this.serverSettings.realDebridSymlinkDir || '').trim()
+      if (next !== prev) {
+        this.updateSettingsKey('realDebridSymlinkDir', next || null)
       }
     },
     saveRealDebridToken() {

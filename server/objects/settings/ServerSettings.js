@@ -87,6 +87,10 @@ class ServerSettings {
     // Browse integrations (AudioBook Bay + Real-Debrid)
     this.realDebridApiToken = null
     this.audioBookBayBaseUrl = 'https://audiobookbay.lu'
+    /** @type {string|null} Server path: parent of torrent folders on rclone/zurg mount */
+    this.realDebridMountPath = null
+    /** @type {string|null} Server path: directory for title-named symlinks into the library */
+    this.realDebridSymlinkDir = null
 
     if (settings) {
       this.construct(settings)
@@ -154,6 +158,8 @@ class ServerSettings {
 
     this.realDebridApiToken = settings.realDebridApiToken && String(settings.realDebridApiToken).trim() ? String(settings.realDebridApiToken).trim() : null
     this.audioBookBayBaseUrl = ServerSettings.normalizeAudioBookBayBaseUrl(settings.audioBookBayBaseUrl)
+    this.realDebridMountPath = ServerSettings.normalizeOptionalPath(settings.realDebridMountPath)
+    this.realDebridSymlinkDir = ServerSettings.normalizeOptionalPath(settings.realDebridSymlinkDir)
 
     if (!Array.isArray(this.authActiveAuthMethods)) {
       this.authActiveAuthMethods = ['local']
@@ -226,6 +232,16 @@ class ServerSettings {
     }
   }
 
+  /**
+   * @param {unknown} value
+   * @returns {string|null}
+   */
+  static normalizeOptionalPath(value) {
+    if (value == null || typeof value !== 'string') return null
+    const t = value.trim()
+    return t ? t : null
+  }
+
   toJSON() {
     // Use toJSONForBrowser if sending to client
     return {
@@ -281,7 +297,9 @@ class ServerSettings {
       authOpenIDAdvancedPermsClaim: this.authOpenIDAdvancedPermsClaim, // Do not return to client
       authOpenIDSubfolderForRedirectURLs: this.authOpenIDSubfolderForRedirectURLs,
       realDebridApiToken: this.realDebridApiToken, // stripped in toJSONForBrowser
-      audioBookBayBaseUrl: this.audioBookBayBaseUrl
+      audioBookBayBaseUrl: this.audioBookBayBaseUrl,
+      realDebridMountPath: this.realDebridMountPath,
+      realDebridSymlinkDir: this.realDebridSymlinkDir
     }
   }
 
@@ -382,6 +400,12 @@ class ServerSettings {
         const next = ServerSettings.normalizeAudioBookBayBaseUrl(payload[key])
         if (this.audioBookBayBaseUrl !== next) {
           this.audioBookBayBaseUrl = next
+          hasUpdates = true
+        }
+      } else if (key === 'realDebridMountPath' || key === 'realDebridSymlinkDir') {
+        const next = ServerSettings.normalizeOptionalPath(payload[key])
+        if (this[key] !== next) {
+          this[key] = next
           hasUpdates = true
         }
       } else if (this[key] !== payload[key]) {
