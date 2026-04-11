@@ -1,6 +1,34 @@
 const Path = require('path')
 const fs = require('../libs/fsExtra')
+const { SupportedAudioTypes } = require('./globals')
 const { filePathToPOSIX, sanitizeFilename, isSameOrSubPath } = require('./fileUtils')
+
+const AUDIO_EXT_SET = new Set(SupportedAudioTypes.map((ext) => `.${ext.toLowerCase()}`))
+
+/**
+ * When the torrent folder has exactly one audio file at its top level (typical single-m4b release),
+ * return that file path so the library symlink points at media, not an extra directory.
+ *
+ * @param {string} folderPath
+ * @returns {Promise<string|null>}
+ */
+async function getSingleTopLevelAudioFile(folderPath) {
+  try {
+    const entries = await fs.readdir(folderPath, { withFileTypes: true })
+    const audioFiles = []
+    for (const ent of entries) {
+      if (!ent.isFile()) continue
+      const ext = Path.extname(ent.name).toLowerCase()
+      if (AUDIO_EXT_SET.has(ext)) {
+        audioFiles.push(filePathToPOSIX(Path.join(folderPath, ent.name)))
+      }
+    }
+    if (audioFiles.length === 1) return audioFiles[0]
+  } catch {
+    // Folder missing, not yet mounted, or unreadable — fall back to directory target
+  }
+  return null
+}
 
 /**
  * @param {string} name
@@ -16,6 +44,7 @@ function safeSanitizeSegment(name, fallback) {
 
 /**
  * Create a symlink: symlinkDir/sanitizedTitle -> mountPath/sanitizedTorrentFolder
+ * (or -> single top-level audio file inside that folder when there is exactly one)
  *
  * @param {object} params
  * @param {string} params.mountPath
@@ -49,9 +78,15 @@ async function createRealDebridLibrarySymlink(params) {
   }
 
   const folderSeg = safeSanitizeSegment(torrentFilename, 'torrent')
-  const targetPath = filePathToPOSIX(Path.join(mountResolved, folderSeg))
-  if (!isSameOrSubPath(mountResolved, targetPath)) {
+  const torrentFolderPath = filePathToPOSIX(Path.join(mountResolved, folderSeg))
+  if (!isSameOrSubPath(mountResolved, torrentFolderPath)) {
     throw new Error('Invalid torrent folder path under mount')
+  }
+
+  const singleAudio = await getSingleTopLevelAudioFile(torrentFolderPath)
+  const targetPath = singleAudio || torrentFolderPath
+  if (!isSameOrSubPath(mountResolved, targetPath)) {
+    throw new Error('Invalid symlink target path under mount')
   }
 
   const titleSeg = safeSanitizeSegment(abbTitle, folderSeg)
@@ -76,8 +111,9 @@ async function createRealDebridLibrarySymlink(params) {
     throw new Error('Invalid symlink path')
   }
 
+  const targetIsDirectory = !singleAudio
   if (global.isWin) {
-    await fs.symlink(targetPath, linkPath, 'dir')
+    await fs.symlink(targetPath, linkPath, targetIsDirectory ? 'dir' : 'file')
   } else {
     await fs.symlink(targetPath, linkPath)
   }
