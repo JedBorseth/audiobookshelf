@@ -131,8 +131,10 @@ class AudiobookBayController {
           })
           payload.symlink = {
             created: true,
+            folderPath: symlinkResult.folderPath,
             linkPath: symlinkResult.linkPath,
-            targetPath: symlinkResult.targetPath
+            targetPath: symlinkResult.targetPath,
+            links: symlinkResult.links
           }
         } catch (symlinkErr) {
           Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
