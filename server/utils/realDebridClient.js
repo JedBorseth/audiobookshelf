@@ -132,7 +132,46 @@ async function getTorrentInfo(token, id) {
   }
 }
 
+/**
+ * Torrent info for polling (does not require filename — used while status is downloading).
+ *
+ * @param {string} token
+ * @param {string} id
+ * @returns {Promise<{ id: string, status: string, progress: number | null, filename: string, message: string }>}
+ */
+async function getTorrentStatus(token, id) {
+  if (!token?.trim()) {
+    throw new Error('Real-Debrid API token is not configured')
+  }
+  const client = createClient(token.trim())
+  const res = await client.get(`/torrents/info/${encodeURIComponent(id)}`, { validateStatus: () => true })
+  if (res.status !== 200) {
+    const msg = res.data?.error || `HTTP ${res.status}`
+    Logger.error(`[realDebridClient] getTorrentStatus failed status=${res.status} body=${JSON.stringify(res.data)}`)
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(res.data))
+  }
+  const data = res.data || {}
+  const progressRaw = data.progress
+  let progress = null
+  if (progressRaw != null && progressRaw !== '') {
+    const n = Number(progressRaw)
+    if (Number.isFinite(n)) {
+      progress = Math.max(0, Math.min(100, n))
+    }
+  }
+  const filename = data.filename != null ? String(data.filename).trim() : ''
+  const message = data.message != null ? String(data.message).trim() : ''
+  return {
+    id: String(data.id || id),
+    status: data.status != null ? String(data.status) : '',
+    progress,
+    filename,
+    message
+  }
+}
+
 module.exports = {
   addMagnetAndSelectAll,
-  getTorrentInfo
+  getTorrentInfo,
+  getTorrentStatus
 }

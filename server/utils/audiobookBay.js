@@ -96,7 +96,8 @@ function hasNextPage(html, page, searchQuery) {
   if (searchQuery && String(searchQuery).trim()) {
     return new RegExp(`<a[^>]+href=["']/page/${next}/\\?s=`, 'i').test(html)
   }
-  return new RegExp(`<a[^>]+href=["']/page/${next}/["']`, 'i').test(html)
+  // Home, category listings (e.g. bestsellers), and similar use …/page/N/ in hrefs.
+  return new RegExp(`<a[^>]+href=["'][^"']*page/${next}/`, 'i').test(html)
 }
 
 function stripTags(s) {
@@ -173,6 +174,9 @@ function buildMagnetUri(infoHash, name, trackers) {
   return `magnet:?${parts.join('&')}`
 }
 
+/** Default listing when not searching (same slug as AudioBook Bay site). */
+const DEFAULT_BROWSE_LIST_PREFIX = '/audio-books/type/bestsellers'
+
 /**
  * @param {string} baseUrl
  * @param {{ q?: string, page?: number }} opts
@@ -191,9 +195,9 @@ function buildListPageUrl(baseUrl, opts) {
   }
 
   if (page <= 1) {
-    return new URL('/', base.origin)
+    return new URL(`${DEFAULT_BROWSE_LIST_PREFIX}/`, base.origin)
   }
-  return new URL(`/page/${page}/`, base.origin)
+  return new URL(`${DEFAULT_BROWSE_LIST_PREFIX}/page/${page}/`, base.origin)
 }
 
 module.exports = {
@@ -203,6 +207,6 @@ module.exports = {
   parseListings,
   hasNextPage,
   parseDetail,
-  buildListPageUrl,
+   buildListPageUrl,
   buildMagnetUri
 }

@@ -74,7 +74,9 @@ class AudiobookBayController {
 
   /**
    * POST /api/libraries/:id/browse/real-debrid
-   * body: { path?: string, magnet?: string }
+   * body: { path?: string, magnet?: string, title?: string }
+   * Adds the torrent to Real-Debrid and starts the download. Library symlink finalization is a separate
+   * step (POST …/finalize) so the client can poll GET …/status for progress.
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
@@ -82,7 +84,6 @@ class AudiobookBayController {
   async addToRealDebrid(req, res) {
     const token = Database.serverSettings.realDebridApiToken
     let magnet = req.body?.magnet !== undefined ? String(req.body.magnet).trim() : ''
-    let abbTitle = req.body?.title !== undefined ? String(req.body.title).trim() : ''
 
     if (!magnet && req.body?.path) {
       const path = String(req.body.path)
@@ -95,10 +96,6 @@ class AudiobookBayController {
         const html = await audiobookBay.fetchAbbHtml(baseUrl, resolved.toString())
         const detail = audiobookBay.parseDetail(html)
         magnet = detail.magnet
-        if (detail.title) {
-          const t = String(detail.title).trim()
-          if (t) abbTitle = t
-        }
       } catch (error) {
         Logger.error(`[AudiobookBayController] addToRealDebrid fetch detail failed`, error)
         return res.status(502).send(error.message || 'Failed to resolve magnet')
@@ -111,51 +108,114 @@ class AudiobookBayController {
 
     try {
       const result = await realDebridClient.addMagnetAndSelectAll(token, magnet)
-      const payload = {
-        success: true,
-        realDebridTorrentId: result.id
-      }
-
       const mountPath = Database.serverSettings.realDebridMountPath
       const symlinkDir = Database.serverSettings.realDebridSymlinkDir
-      if (mountPath && symlinkDir) {
-        try {
-          const info = await realDebridClient.getTorrentInfo(token, result.id)
-          const titleForLink = abbTitle || info.filename
-          const symlinkResult = await createRealDebridLibrarySymlink({
-            mountPath,
-            symlinkDir,
-            libraryFolders: req.library.libraryFolders || [],
-            abbTitle: titleForLink,
-            torrentFilename: info.filename,
-            torrentId: result.id
-          })
-          payload.symlink = {
-            created: true,
-            folderPath: symlinkResult.folderPath,
-            linkPath: symlinkResult.linkPath,
-            targetPath: symlinkResult.targetPath,
-            links: symlinkResult.links
-          }
-          for (const link of symlinkResult.links) {
-            if (link?.linkPath) {
-              Watcher.onFileAdded(req.library.id, link.linkPath)
-            }
-          }
-        } catch (symlinkErr) {
-          Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
-          payload.symlink = {
-            created: false,
-            error: symlinkErr.message || String(symlinkErr)
-          }
-        }
-      }
-
-      res.json(payload)
+      res.json({
+        success: true,
+        realDebridTorrentId: result.id,
+        librarySymlinkConfigured: !!(mountPath?.trim() && symlinkDir?.trim())
+      })
     } catch (error) {
       Logger.error(`[AudiobookBayController] Real-Debrid failed`, error)
       res.status(502).send(error.message || 'Real-Debrid request failed')
     }
+  }
+
+  /**
+   * GET /api/libraries/:id/browse/real-debrid/status?torrentId=
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async realDebridTorrentStatus(req, res) {
+    const token = Database.serverSettings.realDebridApiToken
+    if (!token?.trim()) {
+      return res.status(400).send('Real-Debrid API token is not configured')
+    }
+    const torrentId = req.query.torrentId !== undefined ? String(req.query.torrentId).trim() : ''
+    if (!this.isValidRdTorrentId(torrentId)) {
+      return res.status(400).send('Invalid torrent id')
+    }
+    try {
+      const status = await realDebridClient.getTorrentStatus(token, torrentId)
+      res.json(status)
+    } catch (error) {
+      Logger.error(`[AudiobookBayController] realDebridTorrentStatus failed`, error)
+      res.status(502).send(error.message || 'Real-Debrid request failed')
+    }
+  }
+
+  /**
+   * POST /api/libraries/:id/browse/real-debrid/finalize
+   * body: { torrentId: string, title?: string }
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async finalizeRealDebridSymlink(req, res) {
+    const token = Database.serverSettings.realDebridApiToken
+    if (!token?.trim()) {
+      return res.status(400).send('Real-Debrid API token is not configured')
+    }
+    const torrentId = req.body?.torrentId !== undefined ? String(req.body.torrentId).trim() : ''
+    let abbTitle = req.body?.title !== undefined ? String(req.body.title).trim() : ''
+    if (!this.isValidRdTorrentId(torrentId)) {
+      return res.status(400).send('Invalid torrent id')
+    }
+
+    const mountPath = Database.serverSettings.realDebridMountPath
+    const symlinkDir = Database.serverSettings.realDebridSymlinkDir
+    if (!mountPath?.trim() || !symlinkDir?.trim()) {
+      return res.json({ success: true, skipped: true })
+    }
+
+    const payload = { success: true }
+
+    try {
+      const info = await realDebridClient.getTorrentInfo(token, torrentId)
+      const titleForLink = abbTitle || info.filename
+      try {
+        const symlinkResult = await createRealDebridLibrarySymlink({
+          mountPath,
+          symlinkDir,
+          libraryFolders: req.library.libraryFolders || [],
+          abbTitle: titleForLink,
+          torrentFilename: info.filename,
+          torrentId
+        })
+        payload.symlink = {
+          created: true,
+          folderPath: symlinkResult.folderPath,
+          linkPath: symlinkResult.linkPath,
+          targetPath: symlinkResult.targetPath,
+          links: symlinkResult.links
+        }
+        for (const link of symlinkResult.links) {
+          if (link?.linkPath) {
+            Watcher.onFileAdded(req.library.id, link.linkPath)
+          }
+        }
+      } catch (symlinkErr) {
+        Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
+        payload.symlink = {
+          created: false,
+          error: symlinkErr.message || String(symlinkErr)
+        }
+      }
+      res.json(payload)
+    } catch (error) {
+      Logger.error(`[AudiobookBayController] finalizeRealDebridSymlink failed`, error)
+      res.status(502).send(error.message || 'Real-Debrid request failed')
+    }
+  }
+
+  /**
+   * @param {string} id
+   */
+  isValidRdTorrentId(id) {
+    if (!id || typeof id !== 'string') return false
+    if (id.length > 80 || id.length < 2) return false
+    return /^[A-Za-z0-9_-]+$/.test(id)
   }
 
   /**

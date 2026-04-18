@@ -115,6 +115,18 @@ class ApiRouter {
       AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
       AudiobookBayController.addToRealDebrid.bind(AudiobookBayController)
     )
+    this.router.get(
+      '/libraries/:id/browse/real-debrid/status',
+      LibraryController.middleware.bind(this),
+      AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
+      AudiobookBayController.realDebridTorrentStatus.bind(AudiobookBayController)
+    )
+    this.router.post(
+      '/libraries/:id/browse/real-debrid/finalize',
+      LibraryController.middleware.bind(this),
+      AudiobookBayController.middlewareBookLibrary.bind(AudiobookBayController),
+      AudiobookBayController.finalizeRealDebridSymlink.bind(AudiobookBayController)
+    )
 
     //
     // Item Routes
