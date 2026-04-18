@@ -1,8 +1,12 @@
+const Path = require('path')
 const Logger = require('../Logger')
 const Database = require('../Database')
 const Watcher = require('../Watcher')
+const TaskManager = require('../managers/TaskManager')
+const LibraryScanner = require('../scanner/LibraryScanner')
 const audiobookBay = require('../utils/audiobookBay')
 const realDebridClient = require('../utils/realDebridClient')
+const fileUtils = require('../utils/fileUtils')
 const { createRealDebridLibrarySymlink } = require('../utils/realDebridSymlink')
 
 class AudiobookBayController {
@@ -195,6 +199,13 @@ class AudiobookBayController {
             Watcher.onFileAdded(req.library.id, link.linkPath)
           }
         }
+        setImmediate(() => {
+          try {
+            this.enqueueRealDebridLibraryScan(req.library, symlinkResult.links)
+          } catch (err) {
+            Logger.error(`[AudiobookBayController] enqueueRealDebridLibraryScan failed`, err)
+          }
+        })
       } catch (symlinkErr) {
         Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
         payload.symlink = {
@@ -207,6 +218,62 @@ class AudiobookBayController {
       Logger.error(`[AudiobookBayController] finalizeRealDebridSymlink failed`, error)
       res.status(502).send(error.message || 'Real-Debrid request failed')
     }
+  }
+
+  /**
+   * Mirrors the watcher-driven incremental scan so symlinked media is indexed without requiring a
+   * full library scan (also covers cases where Watcher.addFileUpdate cannot resolve the folder).
+   *
+   * @param {import('../models/Library')} library
+   * @param {{ linkPath?: string }[]} links
+   */
+  enqueueRealDebridLibraryScan(library, links) {
+    const paths = [
+      ...new Set(
+        (links || [])
+          .map((l) => (l?.linkPath ? fileUtils.filePathToPOSIX(l.linkPath) : ''))
+          .filter(Boolean)
+      )
+    ]
+    if (!paths.length) return
+
+    const folder = library.libraryFolders?.find((f) => paths.some((p) => fileUtils.isSameOrSubPath(f.path, p)))
+    if (!folder) {
+      Logger.warn(`[AudiobookBayController] Real-Debrid finalize: could not match a library folder for new links — run a library scan`)
+      return
+    }
+
+    const folderPath = fileUtils.filePathToPOSIX(folder.path)
+    const fileUpdates = paths
+      .map((abs) => {
+        const rel = fileUtils.filePathToPOSIX(Path.relative(folderPath, abs))
+        if (rel.startsWith('..')) {
+          Logger.warn(`[AudiobookBayController] Real-Debrid link path is not under library folder "${folderPath}": ${abs}`)
+          return null
+        }
+        return {
+          path: abs,
+          relPath: rel,
+          folderId: folder.id,
+          libraryId: library.id,
+          type: 'added'
+        }
+      })
+      .filter(Boolean)
+
+    if (!fileUpdates.length) return
+
+    const taskData = {
+      libraryId: library.id,
+      libraryName: library.name
+    }
+    const taskTitleString = {
+      text: `Scanning file changes in "${library.name}"`,
+      key: 'MessageTaskScanningFileChanges',
+      subs: [library.name]
+    }
+    const pendingTask = TaskManager.createAndAddTask('watcher-scan', taskTitleString, null, true, taskData)
+    LibraryScanner.scanFilesChanged(fileUpdates, pendingTask)
   }
 
   /**

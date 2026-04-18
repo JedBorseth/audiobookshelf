@@ -185,11 +185,28 @@ module.exports.recurseFiles = async (path, relPathToReplace = null) => {
   path = filePathToPOSIX(path)
   if (!path.endsWith('/')) path = path + '/'
 
-  if (relPathToReplace) {
+  const pathRootForRealpath = path.replace(/\/$/, '') || '/'
+  /** Prefix of fullname values returned by recursive-readdir-async (uses fs.realpath while walking). */
+  let canonicalRelPrefix = path
+  try {
+    const resolvedRoot = filePathToPOSIX(await fs.realpath(pathRootForRealpath))
+    canonicalRelPrefix = resolvedRoot.endsWith('/') ? resolvedRoot : `${resolvedRoot}/`
+  } catch (err) {
+    Logger.debug(`[fileUtils] recurseFiles: realpath("${pathRootForRealpath}") failed (${err.message}) — relative paths use configured folder`)
+  }
+
+  if (relPathToReplace != null) {
     relPathToReplace = filePathToPOSIX(relPathToReplace)
     if (!relPathToReplace.endsWith('/')) relPathToReplace += '/'
+    const stripRoot = relPathToReplace.replace(/\/$/, '') || '/'
+    try {
+      const resolvedStrip = filePathToPOSIX(await fs.realpath(stripRoot))
+      relPathToReplace = resolvedStrip.endsWith('/') ? resolvedStrip : `${resolvedStrip}/`
+    } catch (err) {
+      Logger.debug(`[fileUtils] recurseFiles: realpath("${stripRoot}") failed (${err.message})`)
+    }
   } else {
-    relPathToReplace = path
+    relPathToReplace = canonicalRelPrefix
   }
 
   const options = {
