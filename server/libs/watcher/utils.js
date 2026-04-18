@@ -74,11 +74,12 @@ const Utils = {
         readdir: async (rootPath, ignore, depth = Infinity, signal, readdirMap) => {
             if (readdirMap && depth === 1 && rootPath in readdirMap) { // Reusing cached data
                 const result = readdirMap[rootPath];
-                return [result.directories, result.files];
+                return [result.directories, result.files.concat(result.symlinks || [])];
             }
             else { // Retrieving fresh data
                 const result = await tiny_readdir_1.default(rootPath, { depth, ignore, signal });
-                return [result.directories, result.files];
+                // Include symlink paths as files so new symlinked media (e.g. Real-Debrid .m4b) is not invisible to the watcher.
+                return [result.directories, result.files.concat(result.symlinks || [])];
             }
         }
     }
