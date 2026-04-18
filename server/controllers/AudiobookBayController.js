@@ -200,11 +200,9 @@ class AudiobookBayController {
           }
         }
         setImmediate(() => {
-          try {
-            this.enqueueRealDebridLibraryScan(req.library, symlinkResult.links)
-          } catch (err) {
+          this.enqueueRealDebridLibraryScan(req.library, symlinkResult.links, symlinkResult.folderPath).catch((err) => {
             Logger.error(`[AudiobookBayController] enqueueRealDebridLibraryScan failed`, err)
-          }
+          })
         })
       } catch (symlinkErr) {
         Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
@@ -226,8 +224,9 @@ class AudiobookBayController {
    *
    * @param {import('../models/Library')} library
    * @param {{ linkPath?: string }[]} links
+   * @param {string} [bookFolderPath] - title folder created under the symlink dir (clears all pending paths under it)
    */
-  enqueueRealDebridLibraryScan(library, links) {
+  async enqueueRealDebridLibraryScan(library, links, bookFolderPath) {
     const paths = [
       ...new Set(
         (links || [])
@@ -236,6 +235,8 @@ class AudiobookBayController {
       )
     ]
     if (!paths.length) return
+
+    Watcher.releasePathsFromPendingScan(paths, bookFolderPath)
 
     const folder = library.libraryFolders?.find((f) => paths.some((p) => fileUtils.isSameOrSubPath(f.path, p)))
     if (!folder) {
@@ -273,7 +274,7 @@ class AudiobookBayController {
       subs: [library.name]
     }
     const pendingTask = TaskManager.createAndAddTask('watcher-scan', taskTitleString, null, true, taskData)
-    LibraryScanner.scanFilesChanged(fileUpdates, pendingTask)
+    await LibraryScanner.scanFilesChanged(fileUpdates, pendingTask)
   }
 
   /**

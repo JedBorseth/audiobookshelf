@@ -320,6 +320,55 @@ class FolderWatcher extends EventEmitter {
   }
 
   /**
+   * Drop paths from pending "still copying" bookkeeping so an immediate incremental scan can see them.
+   * Used when we enqueue LibraryScanner.scanFilesChanged right after creating Real-Debrid symlinks
+   * (onFileAdded would otherwise leave them in pendingFileUpdates and LibraryItemScanner would skip).
+   *
+   * @param {string[]} paths - exact file paths (e.g. symlink targets under the library)
+   * @param {string} [alsoUnderDir] - release any pending path under this directory (book folder)
+   */
+  releasePathsFromPendingScan(paths, alsoUnderDir = null) {
+    const set = new Set((paths || []).map((p) => filePathToPOSIX(p)).filter(Boolean))
+    const dir = alsoUnderDir ? filePathToPOSIX(String(alsoUnderDir).replace(/\/$/, '')) : ''
+    if (!set.size && !dir) return
+
+    /** @param {string} p */
+    const shouldRelease = (p) => {
+      const pn = filePathToPOSIX(p)
+      if (set.has(pn)) return true
+      if (dir && (pn === dir || isSameOrSubPath(dir, pn))) return true
+      return false
+    }
+
+    const prevLen = this.pendingFileUpdates.length
+    this.pendingFileUpdates = this.pendingFileUpdates.filter((pfu) => !shouldRelease(pfu.path))
+    for (const p of [...this.filesBeingAdded]) {
+      if (shouldRelease(p)) this.filesBeingAdded.delete(p)
+    }
+
+    if (prevLen !== this.pendingFileUpdates.length) {
+      Logger.debug(`[Watcher] releasePathsFromPendingScan: removed ${prevLen - this.pendingFileUpdates.length} pending file update(s) for immediate scan`)
+    }
+
+    if (!this.pendingFileUpdates.length) {
+      clearTimeout(this.pendingTimeout)
+      this.pendingTimeout = null
+      if (this.pendingTask) {
+        const taskFinishedString = {
+          text: 'No files to scan',
+          key: 'MessageTaskNoFilesToScan'
+        }
+        this.pendingTask.setFinished(taskFinishedString)
+        TaskManager.taskFinished(this.pendingTask)
+        this.pendingTask = null
+      }
+      this.filesBeingAdded.clear()
+    } else {
+      this.handlePendingFileUpdatesTimeout()
+    }
+  }
+
+  /**
    * Wait X seconds before notifying scanner that files changed
    * reset timer if files are still copying
    */
