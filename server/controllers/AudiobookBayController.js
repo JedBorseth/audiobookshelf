@@ -1,5 +1,6 @@
 const Logger = require('../Logger')
 const Database = require('../Database')
+const Watcher = require('../Watcher')
 const audiobookBay = require('../utils/audiobookBay')
 const realDebridClient = require('../utils/realDebridClient')
 const { createRealDebridLibrarySymlink } = require('../utils/realDebridSymlink')
@@ -135,6 +136,11 @@ class AudiobookBayController {
             linkPath: symlinkResult.linkPath,
             targetPath: symlinkResult.targetPath,
             links: symlinkResult.links
+          }
+          for (const link of symlinkResult.links) {
+            if (link?.linkPath) {
+              Watcher.onFileAdded(req.library.id, link.linkPath)
+            }
           }
         } catch (symlinkErr) {
           Logger.error(`[AudiobookBayController] Real-Debrid symlink failed`, symlinkErr)
